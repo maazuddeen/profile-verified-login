@@ -1,20 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { MessageCircle, Send, Users } from 'lucide-react';
+import { MessageCircle, Send, Users, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface ChatMessage {
   id: string;
+  user_id: string;
   message: string;
   created_at: string;
-  user_id: string;
-  profiles: {
+  production_id: string;
+  profiles?: {
     full_name: string;
   } | null;
 }
@@ -22,12 +23,12 @@ interface ChatMessage {
 interface TeamMember {
   id: string;
   user_id: string;
-  profiles: {
+  role: string;
+  joined_at: string;
+  profiles?: {
     full_name: string;
   } | null;
-  location_shares: {
-    is_sharing: boolean;
-  }[];
+  location_shares?: any[];
 }
 
 interface TeamChatProps {
@@ -36,10 +37,10 @@ interface TeamChatProps {
 
 export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [newMessage, setNewMessage] = useState('');
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [sending, setSending] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -51,32 +52,38 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
     }
   }, [selectedProduction]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
   const fetchMessages = async () => {
     if (!selectedProduction) return;
 
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('chat_messages')
         .select(`
           *,
-          profiles(full_name)
+          profiles!chat_messages_user_id_fkey(full_name)
         `)
         .eq('production_id', selectedProduction)
-        .order('created_at', { ascending: true })
-        .limit(50);
+        .order('created_at', { ascending: true });
 
-      if (error) throw error;
-      setMessages(data || []);
+      if (error) {
+        console.error('Error fetching messages:', error);
+        // Fallback without profiles join
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('chat_messages')
+          .select('*')
+          .eq('production_id', selectedProduction)
+          .order('created_at', { ascending: true });
+
+        if (fallbackError) throw fallbackError;
+        setMessages(fallbackData || []);
+      } else {
+        setMessages(data || []);
+      }
     } catch (error) {
       console.error('Error fetching messages:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -88,13 +95,23 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
         .from('user_productions')
         .select(`
           *,
-          profiles(full_name),
-          location_shares(is_sharing)
+          profiles!user_productions_user_id_fkey(full_name)
         `)
         .eq('production_id', selectedProduction);
 
-      if (error) throw error;
-      setTeamMembers(data || []);
+      if (error) {
+        console.error('Error fetching team members:', error);
+        // Fallback without profiles join
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('user_productions')
+          .select('*')
+          .eq('production_id', selectedProduction);
+
+        if (fallbackError) throw fallbackError;
+        setTeamMembers(fallbackData || []);
+      } else {
+        setTeamMembers(data || []);
+      }
     } catch (error) {
       console.error('Error fetching team members:', error);
     }
@@ -114,20 +131,8 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
           filter: `production_id=eq.${selectedProduction}`,
         },
         (payload) => {
-          // Fetch the full message with profile data
-          supabase
-            .from('chat_messages')
-            .select(`
-              *,
-              profiles(full_name)
-            `)
-            .eq('id', payload.new.id)
-            .single()
-            .then(({ data }) => {
-              if (data) {
-                setMessages(prev => [...prev, data]);
-              }
-            });
+          const newMessage = payload.new as ChatMessage;
+          setMessages(prev => [...prev, newMessage]);
         }
       )
       .subscribe();
@@ -137,23 +142,23 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
     };
   };
 
-  const sendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !selectedProduction) return;
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !selectedProduction || sending) return;
 
-    setLoading(true);
+    setSending(true);
     try {
       const { error } = await supabase
         .from('chat_messages')
         .insert({
-          production_id: selectedProduction,
           user_id: user?.id,
+          production_id: selectedProduction,
           message: newMessage.trim(),
         });
 
       if (error) throw error;
+
       setNewMessage('');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending message:', error);
       toast({
         title: "Error",
@@ -161,17 +166,24 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      setSending(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
     }
   };
 
   if (!selectedProduction) {
     return (
-      <Card>
+      <Card className="bg-[#0B0E11] border-[#F0B90B]">
         <CardContent className="flex items-center justify-center h-64">
           <div className="text-center">
-            <MessageCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">Select a production to chat with your team</p>
+            <MessageCircle className="h-12 w-12 text-[#F0B90B] mx-auto mb-4" />
+            <p className="text-[#F0B90B]">Select a production to chat with your team</p>
           </div>
         </CardContent>
       </Card>
@@ -179,81 +191,119 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Active Team Members
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {teamMembers.map((member) => {
-              const isActive = member.location_shares.some(share => share.is_sharing);
-              return (
-                <div key={member.id} className="flex items-center gap-2">
-                  <Badge variant={isActive ? "default" : "secondary"}>
-                    {member.profiles?.full_name || 'Unknown User'}
-                    {member.user_id === user?.id && " (You)"}
-                  </Badge>
-                  {isActive && <span className="w-2 h-2 bg-green-500 rounded-full"></span>}
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="h-96 flex flex-col">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageCircle className="h-5 w-5" />
-            Team Chat
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex-1 flex flex-col">
-          <ScrollArea className="flex-1 pr-4">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Chat Messages */}
+      <div className="lg:col-span-2">
+        <Card className="bg-[#0B0E11] border-[#F0B90B]">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-[#F0B90B]">
+              <MessageCircle className="h-5 w-5" />
+              Team Chat
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="space-y-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.user_id === user?.id ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-xs p-3 rounded-lg ${
-                      message.user_id === user?.id
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 text-gray-900'
-                    }`}
-                  >
-                    <p className="text-sm font-medium mb-1">
-                      {message.user_id === user?.id ? 'You' : message.profiles?.full_name || 'Unknown User'}
-                    </p>
-                    <p className="text-sm">{message.message}</p>
-                    <p className="text-xs opacity-75 mt-1">
-                      {new Date(message.created_at).toLocaleTimeString()}
-                    </p>
+              {/* Messages */}
+              <div className="h-96 overflow-y-auto space-y-3 p-4 bg-[#1E2329] rounded-lg border border-[#2B3139]">
+                {loading ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F0B90B]"></div>
                   </div>
+                ) : messages.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-[#F0B90B]">
+                    <p>No messages yet. Start the conversation!</p>
+                  </div>
+                ) : (
+                  messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`p-3 rounded-lg max-w-xs ${
+                        message.user_id === user?.id
+                          ? 'ml-auto bg-[#F0B90B] text-[#0B0E11]'
+                          : 'bg-[#2B3139] text-[#F0B90B]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-medium">
+                          {message.user_id === user?.id 
+                            ? 'You' 
+                            : message.profiles?.full_name || 'Unknown User'
+                          }
+                        </span>
+                        <span className="text-xs opacity-70">
+                          {new Date(message.created_at).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <p className="text-sm">{message.message}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Message Input */}
+              <div className="flex gap-2">
+                <Input
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Type your message..."
+                  disabled={sending}
+                  className="flex-1 bg-[#1E2329] border-[#2B3139] text-[#F0B90B] placeholder-gray-400"
+                />
+                <Button
+                  onClick={sendMessage}
+                  disabled={!newMessage.trim() || sending}
+                  className="bg-[#F0B90B] text-[#0B0E11] hover:bg-[#F0B90B]/80"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Team Members */}
+      <div>
+        <Card className="bg-[#0B0E11] border-[#F0B90B]">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-[#F0B90B]">
+              <Users className="h-5 w-5" />
+              Team Members ({teamMembers.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {teamMembers.map((member) => (
+                <div
+                  key={member.id}
+                  className="flex items-center justify-between p-3 bg-[#1E2329] rounded-lg border border-[#2B3139]"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-[#F0B90B]">
+                        {member.profiles?.full_name || 'Unknown User'}
+                      </span>
+                      {member.user_id === user?.id && (
+                        <Badge variant="secondary" className="bg-[#F0B90B] text-[#0B0E11]">
+                          You
+                        </Badge>
+                      )}
+                    </div>
+                    <Badge 
+                      variant="outline" 
+                      className="text-xs border-[#F0B90B] text-[#F0B90B]"
+                    >
+                      {member.role}
+                    </Badge>
+                  </div>
+                  <MapPin className="h-4 w-4 text-[#F0B90B]" />
                 </div>
               ))}
-              <div ref={messagesEndRef} />
             </div>
-          </ScrollArea>
-          
-          <form onSubmit={sendMessage} className="flex gap-2 mt-4">
-            <Input
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Type a message..."
-              disabled={loading}
-            />
-            <Button type="submit" disabled={loading || !newMessage.trim()}>
-              <Send className="h-4 w-4" />
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

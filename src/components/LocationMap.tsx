@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,7 +16,7 @@ interface LocationShare {
   grid_reference: string | null;
   is_sharing: boolean;
   last_updated: string;
-  profiles: {
+  profiles?: {
     full_name: string;
   } | null;
 }
@@ -47,13 +48,25 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
         .from('location_shares')
         .select(`
           *,
-          profiles(full_name)
+          profiles!location_shares_user_id_fkey(full_name)
         `)
         .eq('production_id', selectedProduction)
         .eq('is_sharing', true);
 
-      if (error) throw error;
-      setLocations(data || []);
+      if (error) {
+        console.error('Error fetching team locations:', error);
+        // Fallback query without profiles join
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('location_shares')
+          .select('*')
+          .eq('production_id', selectedProduction)
+          .eq('is_sharing', true);
+
+        if (fallbackError) throw fallbackError;
+        setLocations(fallbackData || []);
+      } else {
+        setLocations(data || []);
+      }
     } catch (error) {
       console.error('Error fetching team locations:', error);
       toast({

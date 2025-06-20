@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,7 +16,7 @@ interface ChatMessage {
   user_id: string;
   profiles: {
     full_name: string;
-  };
+  } | null;
 }
 
 interface TeamMember {
@@ -25,7 +24,7 @@ interface TeamMember {
   user_id: string;
   profiles: {
     full_name: string;
-  };
+  } | null;
   location_shares: {
     is_sharing: boolean;
   }[];
@@ -68,7 +67,7 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
         .from('chat_messages')
         .select(`
           *,
-          profiles!chat_messages_user_id_fkey(full_name)
+          profiles(full_name)
         `)
         .eq('production_id', selectedProduction)
         .order('created_at', { ascending: true })
@@ -89,8 +88,8 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
         .from('user_productions')
         .select(`
           *,
-          profiles!user_productions_user_id_fkey(full_name),
-          location_shares!location_shares_user_id_fkey(is_sharing)
+          profiles(full_name),
+          location_shares(is_sharing)
         `)
         .eq('production_id', selectedProduction);
 
@@ -120,7 +119,7 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
             .from('chat_messages')
             .select(`
               *,
-              profiles!chat_messages_user_id_fkey(full_name)
+              profiles(full_name)
             `)
             .eq('id', payload.new.id)
             .single()
@@ -195,7 +194,7 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
               return (
                 <div key={member.id} className="flex items-center gap-2">
                   <Badge variant={isActive ? "default" : "secondary"}>
-                    {member.profiles.full_name}
+                    {member.profiles?.full_name || 'Unknown User'}
                     {member.user_id === user?.id && " (You)"}
                   </Badge>
                   {isActive && <span className="w-2 h-2 bg-green-500 rounded-full"></span>}
@@ -229,7 +228,7 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
                     }`}
                   >
                     <p className="text-sm font-medium mb-1">
-                      {message.user_id === user?.id ? 'You' : message.profiles.full_name}
+                      {message.user_id === user?.id ? 'You' : message.profiles?.full_name || 'Unknown User'}
                     </p>
                     <p className="text-sm">{message.message}</p>
                     <p className="text-xs opacity-75 mt-1">

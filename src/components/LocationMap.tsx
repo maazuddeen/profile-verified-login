@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,7 +17,7 @@ interface LocationShare {
   last_updated: string;
   profiles: {
     full_name: string;
-  };
+  } | null;
 }
 
 interface LocationMapProps {
@@ -48,7 +47,7 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
         .from('location_shares')
         .select(`
           *,
-          profiles!location_shares_user_id_fkey(full_name)
+          profiles(full_name)
         `)
         .eq('production_id', selectedProduction)
         .eq('is_sharing', true);
@@ -151,7 +150,7 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
                   className="p-4 border rounded-lg bg-gray-50"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium">{location.profiles.full_name}</span>
+                    <span className="font-medium">{location.profiles?.full_name || 'Unknown User'}</span>
                     {location.user_id === user?.id && (
                       <Badge variant="secondary">You</Badge>
                     )}

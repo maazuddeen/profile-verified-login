@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,10 +17,10 @@ interface UserRating {
   created_at: string;
   productions: {
     name: string;
-  };
+  } | null;
   rated_by_profile: {
     full_name: string;
-  };
+  } | null;
 }
 
 export const UserProfile = () => {
@@ -46,8 +45,8 @@ export const UserProfile = () => {
         .from('user_ratings')
         .select(`
           *,
-          productions!user_ratings_production_id_fkey(name),
-          rated_by_profile:profiles!user_ratings_rated_by_fkey(full_name)
+          productions(name),
+          rated_by_profile:profiles!rated_by(full_name)
         `)
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false });
@@ -187,7 +186,7 @@ export const UserProfile = () => {
                 <div key={rating.id} className="p-4 border rounded-lg">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline">{rating.productions.name}</Badge>
+                      <Badge variant="outline">{rating.productions?.name || 'Unknown Production'}</Badge>
                       <div className="flex items-center">
                         {[1, 2, 3, 4, 5].map((star) => (
                           <Star
@@ -200,7 +199,7 @@ export const UserProfile = () => {
                       </div>
                     </div>
                     <span className="text-sm text-gray-500">
-                      by {rating.rated_by_profile.full_name}
+                      by {rating.rated_by_profile?.full_name || 'Unknown User'}
                     </span>
                   </div>
                   {rating.comment && (

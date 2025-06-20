@@ -46,7 +46,7 @@ export const UserProfile = () => {
         .from('user_ratings')
         .select(`
           *,
-          productions!inner(name),
+          productions!user_ratings_production_id_fkey(name),
           rated_by_profile:profiles!user_ratings_rated_by_fkey(full_name)
         `)
         .eq('user_id', user?.id)

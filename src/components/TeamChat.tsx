@@ -68,7 +68,7 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
         .from('chat_messages')
         .select(`
           *,
-          profiles!inner(full_name)
+          profiles!chat_messages_user_id_fkey(full_name)
         `)
         .eq('production_id', selectedProduction)
         .order('created_at', { ascending: true })
@@ -89,8 +89,8 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
         .from('user_productions')
         .select(`
           *,
-          profiles!inner(full_name),
-          location_shares(is_sharing)
+          profiles!user_productions_user_id_fkey(full_name),
+          location_shares!location_shares_user_id_fkey(is_sharing)
         `)
         .eq('production_id', selectedProduction);
 
@@ -120,7 +120,7 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
             .from('chat_messages')
             .select(`
               *,
-              profiles!inner(full_name)
+              profiles!chat_messages_user_id_fkey(full_name)
             `)
             .eq('id', payload.new.id)
             .single()

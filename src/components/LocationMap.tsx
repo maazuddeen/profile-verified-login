@@ -48,7 +48,7 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
         .from('location_shares')
         .select(`
           *,
-          profiles!inner(full_name)
+          profiles!location_shares_user_id_fkey(full_name)
         `)
         .eq('production_id', selectedProduction)
         .eq('is_sharing', true);

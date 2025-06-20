@@ -9,6 +9,109 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      chat_messages: {
+        Row: {
+          created_at: string | null
+          id: string
+          message: string
+          production_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          message: string
+          production_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          message?: string
+          production_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_production_id_fkey"
+            columns: ["production_id"]
+            isOneToOne: false
+            referencedRelation: "productions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      location_shares: {
+        Row: {
+          grid_reference: string | null
+          id: string
+          is_sharing: boolean | null
+          last_updated: string | null
+          latitude: number | null
+          longitude: number | null
+          production_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          grid_reference?: string | null
+          id?: string
+          is_sharing?: boolean | null
+          last_updated?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          production_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          grid_reference?: string | null
+          id?: string
+          is_sharing?: boolean | null
+          last_updated?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          production_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_shares_production_id_fkey"
+            columns: ["production_id"]
+            isOneToOne: false
+            referencedRelation: "productions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      productions: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -38,6 +141,129 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      user_productions: {
+        Row: {
+          id: string
+          joined_at: string | null
+          production_id: string | null
+          role: string | null
+          user_id: string | null
+        }
+        Insert: {
+          id?: string
+          joined_at?: string | null
+          production_id?: string | null
+          role?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          id?: string
+          joined_at?: string | null
+          production_id?: string | null
+          role?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_productions_production_id_fkey"
+            columns: ["production_id"]
+            isOneToOne: false
+            referencedRelation: "productions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_ratings: {
+        Row: {
+          comment: string | null
+          created_at: string | null
+          id: string
+          production_id: string | null
+          rated_by: string | null
+          rating: number | null
+          user_id: string | null
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string | null
+          id?: string
+          production_id?: string | null
+          rated_by?: string | null
+          rating?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string | null
+          id?: string
+          production_id?: string | null
+          rated_by?: string | null
+          rating?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_ratings_production_id_fkey"
+            columns: ["production_id"]
+            isOneToOne: false
+            referencedRelation: "productions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      work_entries: {
+        Row: {
+          created_at: string | null
+          date: string
+          grid_reference: string | null
+          hours_worked: number | null
+          id: string
+          latitude: number | null
+          location: string | null
+          longitude: number | null
+          notes: string | null
+          production_id: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          grid_reference?: string | null
+          hours_worked?: number | null
+          id?: string
+          latitude?: number | null
+          location?: string | null
+          longitude?: number | null
+          notes?: string | null
+          production_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          grid_reference?: string | null
+          hours_worked?: number | null
+          id?: string
+          latitude?: number | null
+          location?: string | null
+          longitude?: number | null
+          notes?: string | null
+          production_id?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_entries_production_id_fkey"
+            columns: ["production_id"]
+            isOneToOne: false
+            referencedRelation: "productions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

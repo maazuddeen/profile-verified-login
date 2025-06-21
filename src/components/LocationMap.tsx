@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Users, Satellite, Map, Globe } from 'lucide-react';
+import { MapPin, Users, Map, Globe } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GoogleMapView } from './GoogleMapView';
 
@@ -33,14 +32,6 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (selectedProduction) {
-      fetchTeamLocations();
-      const unsubscribe = subscribeToLocationUpdates();
-      return unsubscribe;
-    }
-  }, [selectedProduction]);
-
   const fetchTeamLocations = async () => {
     if (!selectedProduction) return;
 
@@ -48,7 +39,6 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
     try {
       console.log('Fetching team locations for production:', selectedProduction);
       
-      // Get location shares for users who are sharing
       const { data: locationData, error: locationError } = await supabase
         .from('location_shares')
         .select('*')
@@ -57,7 +47,6 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
 
       if (locationError) throw locationError;
 
-      // Get profiles for each user
       const locationsWithProfiles = await Promise.all(
         (locationData || []).map(async (location) => {
           const { data: profileData } = await supabase
@@ -114,6 +103,14 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
     };
   };
 
+  useEffect(() => {
+    if (selectedProduction) {
+      fetchTeamLocations();
+      const unsubscribe = subscribeToLocationUpdates();
+      return unsubscribe;
+    }
+  }, [selectedProduction]);
+
   // Prepare data for Google Maps
   const mapLocations = locations
     .filter(loc => loc.latitude && loc.longitude && loc.is_sharing)
@@ -144,7 +141,7 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-[#F0B90B]">
             <Globe className="h-5 w-5" />
-            Team Locations
+            Team Locations ({mapLocations.length} active)
           </CardTitle>
           <div className="flex gap-2">
             <Button
@@ -184,29 +181,7 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
         ) : (
           <div className="space-y-4">
             {viewMode === 'map' ? (
-              <div className="space-y-4">
-                <div className="bg-[#1E2329] border border-[#F0B90B] rounded-lg p-4">
-                  <div className="flex items-center justify-center h-96">
-                    <div className="text-center">
-                      <Globe className="h-16 w-16 text-[#F0B90B] mx-auto mb-4" />
-                      <h3 className="text-[#F0B90B] text-lg font-semibold mb-2">Interactive Map View</h3>
-                      <p className="text-gray-300 mb-4">
-                        Real-time team location tracking with {mapLocations.length} active member{mapLocations.length !== 1 ? 's' : ''}
-                      </p>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="w-3 h-3 bg-[#F0B90B] rounded-full"></div>
-                          <span className="text-gray-300">Your Location</span>
-                        </div>
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                          <span className="text-gray-300">Team Members</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <GoogleMapView locations={mapLocations} />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {locations.map((location) => (

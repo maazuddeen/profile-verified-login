@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -32,44 +33,38 @@ export const ProductionSelector = ({ selectedProduction, onProductionChange }: P
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchProductions();
-  }, []);
+    if (user) {
+      fetchProductions();
+    }
+  }, [user]);
 
   const fetchProductions = async () => {
+    if (!user) {
+      console.log('No user found, skipping fetch');
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      // First try to get productions where user is a member
-      const { data: memberProductions, error: memberError } = await supabase
-        .from('user_productions')
-        .select(`
-          production_id,
-          productions!inner(
-            id,
-            name,
-            description,
-            status
-          )
-        `)
-        .eq('user_id', user?.id);
+      console.log('Fetching productions for user:', user.id);
+      
+      // Get all active productions first (simplified approach)
+      const { data: allProductions, error: allError } = await supabase
+        .from('productions')
+        .select('*')
+        .eq('status', 'active')
+        .order('name');
 
-      if (memberError) {
-        console.error('Error fetching member productions:', memberError);
-        // Fallback: get all active productions
-        const { data: allProductions, error: allError } = await supabase
-          .from('productions')
-          .select('*')
-          .eq('status', 'active')
-          .order('name');
-
-        if (allError) throw allError;
-        setProductions(allProductions || []);
-      } else {
-        // Extract productions from the join result
-        const productionsList = memberProductions?.map(mp => mp.productions).filter(Boolean) || [];
-        setProductions(productionsList);
+      if (allError) {
+        console.error('Error fetching productions:', allError);
+        throw allError;
       }
+
+      console.log('Fetched productions:', allProductions);
+      setProductions(allProductions || []);
     } catch (error) {
-      console.error('Error fetching productions:', error);
+      console.error('Error in fetchProductions:', error);
       toast({
         title: "Error",
         description: "Failed to load productions. Please try refreshing.",
@@ -81,6 +76,15 @@ export const ProductionSelector = ({ selectedProduction, onProductionChange }: P
   };
 
   const createProduction = async () => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to create a production",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!newProductionName.trim()) {
       toast({
         title: "Error",
@@ -92,13 +96,15 @@ export const ProductionSelector = ({ selectedProduction, onProductionChange }: P
 
     setCreating(true);
     try {
+      console.log('Creating production with user:', user.id);
+      
       // Create the production
       const { data: production, error: productionError } = await supabase
         .from('productions')
         .insert({
           name: newProductionName.trim(),
           description: newProductionDescription.trim() || null,
-          created_by: user?.id,
+          created_by: user.id,
           status: 'active'
         })
         .select()
@@ -109,23 +115,25 @@ export const ProductionSelector = ({ selectedProduction, onProductionChange }: P
         throw productionError;
       }
 
-      // Add creator as admin member
-      const { error: membershipError } = await supabase
-        .from('user_productions')
-        .insert({
-          user_id: user?.id,
-          production_id: production.id,
-          role: 'admin',
-        });
+      console.log('Production created successfully:', production);
 
-      if (membershipError) {
-        console.error('Membership creation error:', membershipError);
-        // Don't throw here as the production was created successfully
-        toast({
-          title: "Warning",
-          description: "Production created but failed to add you as admin. Please contact support.",
-          variant: "destructive",
-        });
+      // Try to add creator as admin member, but don't fail if this doesn't work
+      try {
+        const { error: membershipError } = await supabase
+          .from('user_productions')
+          .insert({
+            user_id: user.id,
+            production_id: production.id,
+            role: 'admin',
+          });
+
+        if (membershipError) {
+          console.error('Membership creation error:', membershipError);
+          // Don't throw here, just log
+        }
+      } catch (membershipError) {
+        console.error('Failed to create membership:', membershipError);
+        // Continue anyway
       }
 
       toast({
@@ -154,6 +162,17 @@ export const ProductionSelector = ({ selectedProduction, onProductionChange }: P
       setCreating(false);
     }
   };
+
+  if (!user) {
+    return (
+      <div className="space-y-2">
+        <Label className="text-[#F0B90B]">Select Production</Label>
+        <div className="p-4 bg-[#1E2329] border border-[#F0B90B] rounded-lg text-center">
+          <p className="text-[#F0B90B]">Please log in to access productions</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

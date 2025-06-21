@@ -15,7 +15,7 @@ interface ChatMessage {
   message: string;
   created_at: string;
   production_id: string;
-  profiles?: {
+  user_profile?: {
     full_name: string;
   } | null;
 }
@@ -25,10 +25,9 @@ interface TeamMember {
   user_id: string;
   role: string;
   joined_at: string;
-  profiles?: {
+  user_profile?: {
     full_name: string;
   } | null;
-  location_shares?: any[];
 }
 
 interface TeamChatProps {
@@ -57,29 +56,32 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // First get chat messages
+      const { data: messageData, error: messageError } = await supabase
         .from('chat_messages')
-        .select(`
-          *,
-          profiles!chat_messages_user_id_fkey(full_name)
-        `)
+        .select('*')
         .eq('production_id', selectedProduction)
         .order('created_at', { ascending: true });
 
-      if (error) {
-        console.error('Error fetching messages:', error);
-        // Fallback without profiles join
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('chat_messages')
-          .select('*')
-          .eq('production_id', selectedProduction)
-          .order('created_at', { ascending: true });
+      if (messageError) throw messageError;
 
-        if (fallbackError) throw fallbackError;
-        setMessages(fallbackData || []);
-      } else {
-        setMessages(data || []);
-      }
+      // Then get profiles for each user
+      const messagesWithProfiles = await Promise.all(
+        (messageData || []).map(async (message) => {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', message.user_id)
+            .single();
+
+          return {
+            ...message,
+            user_profile: profileData
+          };
+        })
+      );
+
+      setMessages(messagesWithProfiles);
     } catch (error) {
       console.error('Error fetching messages:', error);
     } finally {
@@ -91,27 +93,31 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
     if (!selectedProduction) return;
 
     try {
-      const { data, error } = await supabase
+      // First get team members
+      const { data: memberData, error: memberError } = await supabase
         .from('user_productions')
-        .select(`
-          *,
-          profiles!user_productions_user_id_fkey(full_name)
-        `)
+        .select('*')
         .eq('production_id', selectedProduction);
 
-      if (error) {
-        console.error('Error fetching team members:', error);
-        // Fallback without profiles join
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('user_productions')
-          .select('*')
-          .eq('production_id', selectedProduction);
+      if (memberError) throw memberError;
 
-        if (fallbackError) throw fallbackError;
-        setTeamMembers(fallbackData || []);
-      } else {
-        setTeamMembers(data || []);
-      }
+      // Then get profiles for each user
+      const membersWithProfiles = await Promise.all(
+        (memberData || []).map(async (member) => {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', member.user_id)
+            .single();
+
+          return {
+            ...member,
+            user_profile: profileData
+          };
+        })
+      );
+
+      setTeamMembers(membersWithProfiles);
     } catch (error) {
       console.error('Error fetching team members:', error);
     }
@@ -227,7 +233,7 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
                         <span className="text-xs font-medium">
                           {message.user_id === user?.id 
                             ? 'You' 
-                            : message.profiles?.full_name || 'Unknown User'
+                            : message.user_profile?.full_name || 'Unknown User'
                           }
                         </span>
                         <span className="text-xs opacity-70">
@@ -282,7 +288,7 @@ export const TeamChat = ({ selectedProduction }: TeamChatProps) => {
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-[#F0B90B]">
-                        {member.profiles?.full_name || 'Unknown User'}
+                        {member.user_profile?.full_name || 'Unknown User'}
                       </span>
                       {member.user_id === user?.id && (
                         <Badge variant="secondary" className="bg-[#F0B90B] text-[#0B0E11]">

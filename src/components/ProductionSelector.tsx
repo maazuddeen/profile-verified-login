@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Refresh } from 'lucide-react';
+import { Plus, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Production {
@@ -159,8 +158,8 @@ export const ProductionSelector = ({ selectedProduction, onProductionChange }: P
   if (loading) {
     return (
       <div className="space-y-2">
-        <Label>Select Production</Label>
-        <div className="animate-pulse bg-gray-200 h-10 rounded"></div>
+        <Label className="text-[#F0B90B]">Select Production</Label>
+        <div className="animate-pulse bg-[#2B3139] h-10 rounded"></div>
       </div>
     );
   }
@@ -169,21 +168,21 @@ export const ProductionSelector = ({ selectedProduction, onProductionChange }: P
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <div className="flex-1">
-          <Label>Select Production</Label>
+          <Label className="text-[#F0B90B]">Select Production</Label>
           <Select value={selectedProduction || ''} onValueChange={onProductionChange}>
-            <SelectTrigger>
+            <SelectTrigger className="bg-[#0B0E11] border-[#2B3139] text-[#F0B90B]">
               <SelectValue placeholder={
                 productions.length === 0 
                   ? "No productions available - create one first" 
                   : "Choose a production..."
               } />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-[#1E2329] border-[#2B3139]">
               {productions.map((production) => (
-                <SelectItem key={production.id} value={production.id}>
+                <SelectItem key={production.id} value={production.id} className="text-[#F0B90B] focus:bg-[#F0B90B] focus:text-[#0B0E11]">
                   {production.name}
                   {production.description && (
-                    <span className="text-xs text-gray-500 ml-2">
+                    <span className="text-xs text-gray-400 ml-2">
                       - {production.description}
                     </span>
                   )}
@@ -196,47 +195,49 @@ export const ProductionSelector = ({ selectedProduction, onProductionChange }: P
         <Button 
           variant="outline" 
           size="icon" 
-          className="mt-6"
+          className="mt-6 border-[#F0B90B] text-[#F0B90B] hover:bg-[#F0B90B] hover:text-[#0B0E11]"
           onClick={fetchProductions}
           disabled={loading}
         >
-          <Refresh className="h-4 w-4" />
+          <RefreshCw className="h-4 w-4" />
         </Button>
         
         <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
           <DialogTrigger asChild>
-            <Button variant="outline" size="icon" className="mt-6">
+            <Button variant="outline" size="icon" className="mt-6 border-[#F0B90B] text-[#F0B90B] hover:bg-[#F0B90B] hover:text-[#0B0E11]">
               <Plus className="h-4 w-4" />
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="bg-[#1E2329] border-[#F0B90B]">
             <DialogHeader>
-              <DialogTitle>Create New Production</DialogTitle>
+              <DialogTitle className="text-[#F0B90B]">Create New Production</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <Label htmlFor="name">Production Name *</Label>
+                <Label htmlFor="name" className="text-[#F0B90B]">Production Name *</Label>
                 <Input
                   id="name"
                   value={newProductionName}
                   onChange={(e) => setNewProductionName(e.target.value)}
                   placeholder="e.g., Film Project A"
                   disabled={creating}
+                  className="bg-[#0B0E11] border-[#2B3139] text-[#F0B90B]"
                 />
               </div>
               <div>
-                <Label htmlFor="description">Description (Optional)</Label>
+                <Label htmlFor="description" className="text-[#F0B90B]">Description (Optional)</Label>
                 <Input
                   id="description"
                   value={newProductionDescription}
                   onChange={(e) => setNewProductionDescription(e.target.value)}
                   placeholder="Brief description..."
                   disabled={creating}
+                  className="bg-[#0B0E11] border-[#2B3139] text-[#F0B90B]"
                 />
               </div>
               <Button 
                 onClick={createProduction} 
-                className="w-full"
+                className="w-full bg-[#F0B90B] text-[#0B0E11] hover:bg-[#F0B90B]/80"
                 disabled={creating || !newProductionName.trim()}
               >
                 {creating ? 'Creating...' : 'Create Production'}
@@ -247,8 +248,8 @@ export const ProductionSelector = ({ selectedProduction, onProductionChange }: P
       </div>
       
       {productions.length === 0 && !loading && (
-        <div className="text-center p-4 bg-yellow-50 rounded-lg">
-          <p className="text-sm text-yellow-700">
+        <div className="text-center p-4 bg-[#1E2329] border border-[#F0B90B] rounded-lg">
+          <p className="text-sm text-[#F0B90B]">
             No productions found. Create your first production to get started!
           </p>
         </div>

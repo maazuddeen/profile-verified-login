@@ -16,7 +16,7 @@ interface UserLocation {
   grid_reference: string | null;
   is_sharing: boolean;
   last_updated: string;
-  profiles?: {
+  user_profile?: {
     full_name: string;
   } | null;
 }
@@ -51,30 +51,32 @@ export const UserTrackingPage = ({ selectedProduction }: UserTrackingPageProps) 
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // First get location shares
+      const { data: locationData, error: locationError } = await supabase
         .from('location_shares')
-        .select(`
-          *,
-          profiles!location_shares_user_id_fkey(full_name)
-        `)
+        .select('*')
         .eq('production_id', selectedProduction)
         .order('last_updated', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching user locations:', error);
-        // Fallback without profiles join
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('location_shares')
-          .select('*')
-          .eq('production_id', selectedProduction)
-          .order('last_updated', { ascending: false });
+      if (locationError) throw locationError;
 
-        if (fallbackError) throw fallbackError;
-        setUserLocations(fallbackData || []);
-      } else {
-        setUserLocations(data || []);
-      }
-      
+      // Then get profiles for each user
+      const locationsWithProfiles = await Promise.all(
+        (locationData || []).map(async (location) => {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', location.user_id)
+            .single();
+
+          return {
+            ...location,
+            user_profile: profileData
+          };
+        })
+      );
+
+      setUserLocations(locationsWithProfiles);
       setLastRefresh(new Date());
     } catch (error) {
       console.error('Error fetching user locations:', error);
@@ -211,7 +213,7 @@ export const UserTrackingPage = ({ selectedProduction }: UserTrackingPageProps) 
                           className={`w-3 h-3 rounded-full ${getStatusColor(location)}`}
                         />
                         <span className="font-medium text-[#F0B90B]">
-                          {location.profiles?.full_name || 'Unknown User'}
+                          {location.user_profile?.full_name || 'Unknown User'}
                         </span>
                       </div>
                       {location.user_id === user?.id && (

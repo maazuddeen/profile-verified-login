@@ -16,7 +16,7 @@ interface LocationShare {
   grid_reference: string | null;
   is_sharing: boolean;
   last_updated: string;
-  profiles?: {
+  user_profile?: {
     full_name: string;
   } | null;
 }
@@ -44,29 +44,32 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      // First get location shares
+      const { data: locationData, error: locationError } = await supabase
         .from('location_shares')
-        .select(`
-          *,
-          profiles!location_shares_user_id_fkey(full_name)
-        `)
+        .select('*')
         .eq('production_id', selectedProduction)
         .eq('is_sharing', true);
 
-      if (error) {
-        console.error('Error fetching team locations:', error);
-        // Fallback query without profiles join
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('location_shares')
-          .select('*')
-          .eq('production_id', selectedProduction)
-          .eq('is_sharing', true);
+      if (locationError) throw locationError;
 
-        if (fallbackError) throw fallbackError;
-        setLocations(fallbackData || []);
-      } else {
-        setLocations(data || []);
-      }
+      // Then get profiles for each user
+      const locationsWithProfiles = await Promise.all(
+        (locationData || []).map(async (location) => {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', location.user_id)
+            .single();
+
+          return {
+            ...location,
+            user_profile: profileData
+          };
+        })
+      );
+
+      setLocations(locationsWithProfiles);
     } catch (error) {
       console.error('Error fetching team locations:', error);
       toast({
@@ -105,11 +108,11 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
 
   if (!selectedProduction) {
     return (
-      <Card>
+      <Card className="bg-[#0B0E11] border-[#F0B90B]">
         <CardContent className="flex items-center justify-center h-64">
           <div className="text-center">
-            <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">Select a production to view team locations</p>
+            <MapPin className="h-12 w-12 text-[#F0B90B] mx-auto mb-4" />
+            <p className="text-[#F0B90B]">Select a production to view team locations</p>
           </div>
         </CardContent>
       </Card>
@@ -117,10 +120,10 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
   }
 
   return (
-    <Card>
+    <Card className="bg-[#0B0E11] border-[#F0B90B]">
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-[#F0B90B]">
             <MapPin className="h-5 w-5" />
             Team Locations
           </CardTitle>
@@ -129,6 +132,7 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
               variant={viewMode === 'standard' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setViewMode('standard')}
+              className="border-[#F0B90B] text-[#F0B90B] hover:bg-[#F0B90B] hover:text-[#0B0E11]"
             >
               <Map className="h-4 w-4 mr-1" />
               Standard
@@ -137,6 +141,7 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
               variant={viewMode === 'satellite' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setViewMode('satellite')}
+              className="border-[#F0B90B] text-[#F0B90B] hover:bg-[#F0B90B] hover:text-[#0B0E11]"
             >
               <Satellite className="h-4 w-4 mr-1" />
               Satellite
@@ -147,12 +152,12 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
       <CardContent>
         {loading ? (
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F0B90B]"></div>
           </div>
         ) : locations.length === 0 ? (
           <div className="text-center py-8">
-            <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">No team members are currently sharing their location</p>
+            <Users className="h-12 w-12 text-[#F0B90B] mx-auto mb-4" />
+            <p className="text-[#F0B90B]">No team members are currently sharing their location</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -160,15 +165,19 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
               {locations.map((location) => (
                 <div
                   key={location.id}
-                  className="p-4 border rounded-lg bg-gray-50"
+                  className="p-4 border border-[#2B3139] rounded-lg bg-[#1E2329]"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium">{location.profiles?.full_name || 'Unknown User'}</span>
+                    <span className="font-medium text-[#F0B90B]">
+                      {location.user_profile?.full_name || 'Unknown User'}
+                    </span>
                     {location.user_id === user?.id && (
-                      <Badge variant="secondary">You</Badge>
+                      <Badge variant="secondary" className="bg-[#F0B90B] text-[#0B0E11]">
+                        You
+                      </Badge>
                     )}
                   </div>
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-gray-300">
                     <p>Grid: {location.grid_reference || 'Unknown'}</p>
                     <p>
                       Last updated: {new Date(location.last_updated).toLocaleTimeString()}
@@ -178,9 +187,9 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
               ))}
             </div>
             
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-              <h4 className="font-medium text-blue-900 mb-2">Map View ({viewMode})</h4>
-              <p className="text-sm text-blue-700">
+            <div className="mt-6 p-4 bg-[#1E2329] border border-[#F0B90B] rounded-lg">
+              <h4 className="font-medium text-[#F0B90B] mb-2">Map View ({viewMode})</h4>
+              <p className="text-sm text-gray-300">
                 Interactive map with {viewMode} view showing all team member locations.
                 Real-time updates enabled.
               </p>

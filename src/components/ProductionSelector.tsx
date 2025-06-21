@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -49,7 +48,7 @@ export const ProductionSelector = ({ selectedProduction, onProductionChange }: P
     try {
       console.log('Fetching productions for user:', user.id);
       
-      // Get all active productions first (simplified approach)
+      // Get all active productions (simplified to avoid RLS issues)
       const { data: allProductions, error: allError } = await supabase
         .from('productions')
         .select('*')
@@ -98,7 +97,7 @@ export const ProductionSelector = ({ selectedProduction, onProductionChange }: P
     try {
       console.log('Creating production with user:', user.id);
       
-      // Create the production
+      // Create the production with proper record keeping
       const { data: production, error: productionError } = await supabase
         .from('productions')
         .insert({
@@ -117,28 +116,23 @@ export const ProductionSelector = ({ selectedProduction, onProductionChange }: P
 
       console.log('Production created successfully:', production);
 
-      // Try to add creator as admin member, but don't fail if this doesn't work
-      try {
-        const { error: membershipError } = await supabase
-          .from('user_productions')
-          .insert({
-            user_id: user.id,
-            production_id: production.id,
-            role: 'admin',
-          });
+      // Create user_productions record for proper membership tracking
+      const { error: membershipError } = await supabase
+        .from('user_productions')
+        .insert({
+          user_id: user.id,
+          production_id: production.id,
+          role: 'admin',
+        });
 
-        if (membershipError) {
-          console.error('Membership creation error:', membershipError);
-          // Don't throw here, just log
-        }
-      } catch (membershipError) {
-        console.error('Failed to create membership:', membershipError);
-        // Continue anyway
+      if (membershipError) {
+        console.error('Membership creation error:', membershipError);
+        // Don't throw here, production was created successfully
       }
 
       toast({
         title: "Success",
-        description: `Production "${production.name}" created successfully!`,
+        description: `Production "${production.name}" created successfully! You can now enable location sharing.`,
       });
 
       // Reset form and close dialog
@@ -151,6 +145,9 @@ export const ProductionSelector = ({ selectedProduction, onProductionChange }: P
       
       // Auto-select the new production
       onProductionChange(production.id);
+
+      // Log for debugging
+      console.log('Production created and selected:', production.id);
     } catch (error: any) {
       console.error('Error creating production:', error);
       toast({

@@ -5,8 +5,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Users, Satellite, Map } from 'lucide-react';
+import { MapPin, Users, Satellite, Map, Globe } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { GoogleMapView } from './GoogleMapView';
 
 interface LocationShare {
   id: string;
@@ -27,7 +28,7 @@ interface LocationMapProps {
 
 export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
   const [locations, setLocations] = useState<LocationShare[]>([]);
-  const [viewMode, setViewMode] = useState<'satellite' | 'standard'>('standard');
+  const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
@@ -35,7 +36,8 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
   useEffect(() => {
     if (selectedProduction) {
       fetchTeamLocations();
-      subscribeToLocationUpdates();
+      const unsubscribe = subscribeToLocationUpdates();
+      return unsubscribe;
     }
   }, [selectedProduction]);
 
@@ -44,7 +46,9 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
 
     setLoading(true);
     try {
-      // First get location shares
+      console.log('Fetching team locations for production:', selectedProduction);
+      
+      // Get location shares for users who are sharing
       const { data: locationData, error: locationError } = await supabase
         .from('location_shares')
         .select('*')
@@ -53,7 +57,7 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
 
       if (locationError) throw locationError;
 
-      // Then get profiles for each user
+      // Get profiles for each user
       const locationsWithProfiles = await Promise.all(
         (locationData || []).map(async (location) => {
           const { data: profileData } = await supabase
@@ -69,6 +73,7 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
         })
       );
 
+      console.log('Team locations with profiles:', locationsWithProfiles);
       setLocations(locationsWithProfiles);
     } catch (error) {
       console.error('Error fetching team locations:', error);
@@ -83,8 +88,10 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
   };
 
   const subscribeToLocationUpdates = () => {
-    if (!selectedProduction) return;
+    if (!selectedProduction) return () => {};
 
+    console.log('Subscribing to location updates for production:', selectedProduction);
+    
     const channel = supabase
       .channel('location-updates')
       .on(
@@ -95,7 +102,8 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
           table: 'location_shares',
           filter: `production_id=eq.${selectedProduction}`,
         },
-        () => {
+        (payload) => {
+          console.log('Real-time location update:', payload);
           fetchTeamLocations();
         }
       )
@@ -105,6 +113,17 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
       supabase.removeChannel(channel);
     };
   };
+
+  // Prepare data for Google Maps
+  const mapLocations = locations
+    .filter(loc => loc.latitude && loc.longitude && loc.is_sharing)
+    .map(loc => ({
+      id: loc.id,
+      latitude: loc.latitude!,
+      longitude: loc.longitude!,
+      user_name: loc.user_profile?.full_name || 'Unknown User',
+      is_current_user: loc.user_id === user?.id
+    }));
 
   if (!selectedProduction) {
     return (
@@ -124,27 +143,27 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-[#F0B90B]">
-            <MapPin className="h-5 w-5" />
+            <Globe className="h-5 w-5" />
             Team Locations
           </CardTitle>
           <div className="flex gap-2">
             <Button
-              variant={viewMode === 'standard' ? 'default' : 'outline'}
+              variant={viewMode === 'map' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setViewMode('standard')}
+              onClick={() => setViewMode('map')}
               className="border-[#F0B90B] text-[#F0B90B] hover:bg-[#F0B90B] hover:text-[#0B0E11]"
             >
               <Map className="h-4 w-4 mr-1" />
-              Standard
+              Map
             </Button>
             <Button
-              variant={viewMode === 'satellite' ? 'default' : 'outline'}
+              variant={viewMode === 'list' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setViewMode('satellite')}
+              onClick={() => setViewMode('list')}
               className="border-[#F0B90B] text-[#F0B90B] hover:bg-[#F0B90B] hover:text-[#0B0E11]"
             >
-              <Satellite className="h-4 w-4 mr-1" />
-              Satellite
+              <Users className="h-4 w-4 mr-1" />
+              List
             </Button>
           </div>
         </div>
@@ -158,42 +177,68 @@ export const LocationMap = ({ selectedProduction }: LocationMapProps) => {
           <div className="text-center py-8">
             <Users className="h-12 w-12 text-[#F0B90B] mx-auto mb-4" />
             <p className="text-[#F0B90B]">No team members are currently sharing their location</p>
+            <p className="text-sm text-gray-400 mt-2">
+              Enable location sharing to see your team on the map
+            </p>
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {locations.map((location) => (
-                <div
-                  key={location.id}
-                  className="p-4 border border-[#2B3139] rounded-lg bg-[#1E2329]"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-[#F0B90B]">
-                      {location.user_profile?.full_name || 'Unknown User'}
-                    </span>
-                    {location.user_id === user?.id && (
-                      <Badge variant="secondary" className="bg-[#F0B90B] text-[#0B0E11]">
-                        You
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="text-sm text-gray-300">
-                    <p>Grid: {location.grid_reference || 'Unknown'}</p>
-                    <p>
-                      Last updated: {new Date(location.last_updated).toLocaleTimeString()}
-                    </p>
+            {viewMode === 'map' ? (
+              <div className="space-y-4">
+                <div className="bg-[#1E2329] border border-[#F0B90B] rounded-lg p-4">
+                  <div className="flex items-center justify-center h-96">
+                    <div className="text-center">
+                      <Globe className="h-16 w-16 text-[#F0B90B] mx-auto mb-4" />
+                      <h3 className="text-[#F0B90B] text-lg font-semibold mb-2">Interactive Map View</h3>
+                      <p className="text-gray-300 mb-4">
+                        Real-time team location tracking with {mapLocations.length} active member{mapLocations.length !== 1 ? 's' : ''}
+                      </p>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-3 h-3 bg-[#F0B90B] rounded-full"></div>
+                          <span className="text-gray-300">Your Location</span>
+                        </div>
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                          <span className="text-gray-300">Team Members</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-            
-            <div className="mt-6 p-4 bg-[#1E2329] border border-[#F0B90B] rounded-lg">
-              <h4 className="font-medium text-[#F0B90B] mb-2">Map View ({viewMode})</h4>
-              <p className="text-sm text-gray-300">
-                Interactive map with {viewMode} view showing all team member locations.
-                Real-time updates enabled.
-              </p>
-            </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {locations.map((location) => (
+                  <div
+                    key={location.id}
+                    className="p-4 border border-[#2B3139] rounded-lg bg-[#1E2329]"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-[#F0B90B]">
+                        {location.user_profile?.full_name || 'Unknown User'}
+                      </span>
+                      {location.user_id === user?.id && (
+                        <Badge variant="secondary" className="bg-[#F0B90B] text-[#0B0E11]">
+                          You
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-sm text-gray-300">
+                      <p>Grid: {location.grid_reference || 'Unknown'}</p>
+                      <p>
+                        Last updated: {new Date(location.last_updated).toLocaleTimeString()}
+                      </p>
+                      {location.latitude && location.longitude && (
+                        <p className="text-xs mt-1 text-gray-400">
+                          {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </CardContent>
